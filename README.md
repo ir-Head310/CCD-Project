@@ -127,8 +127,12 @@ terraform apply                                  # ~5-8 min
 terraform output
 ```
 
-If creation fails with `RequestDisallowedByPolicy`, your student subscription doesn't allow that region. Set
-`location` to an allowed region and apply again. If it fails with a vCPU quota error, keep `node_max_count = 2`.
+The region defaults to `indiasouthcentral`. On the MAHE student subscription, policy allows only five regions
+(`az policy assignment list`), and `centralindia` marks every small VM size `NotAvailableForSubscription`. If
+creation fails with `RequestDisallowedByPolicy`, set `location` to an allowed region and apply again. Before you
+pick a region, check that it offers the VM size:
+`az vm list-skus -l <region> --size Standard_B2s --resource-type virtualMachines`. If apply fails with a vCPU quota
+error, keep `node_max_count = 2`.
 
 ## 3. Deploy
 

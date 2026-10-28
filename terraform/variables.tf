@@ -10,9 +10,12 @@ variable "project" {
 }
 
 variable "location" {
+  # On the MAHE Azure for Students subscription, policy allows only uaenorth, centralindia,
+  # koreacentral, indiasouthcentral and malaysiawest, and centralindia offers no usable VM sizes.
+  # indiasouthcentral (Hyderabad) has Standard_B2s with a 4 vCPU quota.
   description = "Azure region. Azure for Students only allows some regions; change this if creation is denied by policy."
   type        = string
-  default     = "centralindia"
+  default     = "indiasouthcentral"
 }
 
 variable "node_vm_size" {

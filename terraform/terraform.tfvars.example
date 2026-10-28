@@ -1,4 +1,4 @@
 # Copy to terraform.tfvars and fill in.
 subscription_id = "00000000-0000-0000-0000-000000000000"
-location        = "centralindia"
+location        = "indiasouthcentral"
 github_repo     = "your-github-user/flash-sale-autoscaling"
