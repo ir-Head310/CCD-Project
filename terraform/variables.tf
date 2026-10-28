@@ -53,3 +53,13 @@ variable "github_branch" {
   type        = string
   default     = "main"
 }
+
+variable "github_oidc_subject" {
+  description = <<-EOT
+    Exact OIDC subject GitHub presents, if it differs from repo:<owner>/<repo>:ref:refs/heads/<branch>.
+    Newer repos send an ID-qualified form such as repo:owner@123/repo@456:ref:refs/heads/main; the
+    failing azure/login step prints the exact value in its AADSTS700213 error.
+  EOT
+  type        = string
+  default     = ""
+}

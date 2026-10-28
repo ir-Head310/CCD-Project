@@ -20,13 +20,12 @@ resource "azurerm_user_assigned_identity" "ci" {
 }
 
 resource "azurerm_federated_identity_credential" "ci" {
-  count               = local.create_ci ? 1 : 0
-  name                = "github-${var.github_branch}"
-  resource_group_name = azurerm_resource_group.main.name
-  parent_id           = azurerm_user_assigned_identity.ci[0].id
-  audience            = ["api://AzureADTokenExchange"]
-  issuer              = "https://token.actions.githubusercontent.com"
-  subject             = "repo:${var.github_repo}:ref:refs/heads/${var.github_branch}"
+  count     = local.create_ci ? 1 : 0
+  name      = "github-${var.github_branch}"
+  parent_id = azurerm_user_assigned_identity.ci[0].id
+  audience  = ["api://AzureADTokenExchange"]
+  issuer    = "https://token.actions.githubusercontent.com"
+  subject   = coalesce(var.github_oidc_subject, "repo:${var.github_repo}:ref:refs/heads/${var.github_branch}")
 }
 
 # Least privilege: push images, and fetch cluster credentials. Nothing else.
