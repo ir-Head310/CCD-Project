@@ -1,0 +1,72 @@
+name: build-and-deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "k8s/**"
+      - ".github/workflows/deploy.yml"
+  pull_request:
+    paths:
+      - "app/**"
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # needed for Azure OIDC login
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r app/requirements.txt pytest
+      - run: pytest -q
+        working-directory: app
+
+  build-and-deploy:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ${{ vars.ACR_NAME }}.azurecr.io/product-service:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC, no stored secret)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push image to ACR
+        run: |
+          az acr login --name "${{ vars.ACR_NAME }}"
+          docker build -t "$IMAGE" app
+          docker push "$IMAGE"
+
+      - name: Get AKS credentials
+        uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ vars.AKS_RESOURCE_GROUP }}
+          cluster-name: ${{ vars.AKS_NAME }}
+
+      - name: Render manifests with this commit's image
+        run: |
+          mkdir -p rendered
+          cp k8s/*.yaml rendered/
+          sed -i "s#image: product-service:local#image: ${IMAGE}#" rendered/10-deployment.yaml
+          sed -i "s#imagePullPolicy: IfNotPresent#imagePullPolicy: Always#" rendered/10-deployment.yaml
+          sed -i "s#value: \"v1\"#value: \"${GITHUB_SHA::7}\"#" rendered/10-deployment.yaml
+          grep -n "image:" rendered/10-deployment.yaml
+
+      - name: Rolling update on AKS
+        run: |
+          kubectl apply -f rendered/
+          kubectl -n flash-sale rollout status deployment/product-service --timeout=300s
+          kubectl -n flash-sale get pods,svc,hpa -o wide

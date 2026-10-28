@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-service
+  namespace: flash-sale
+  labels:
+    app: product-service
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: product-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # bring up one new pod at a time
+      maxUnavailable: 0  # never drop below the current serving capacity
+  template:
+    metadata:
+      labels:
+        app: product-service
+    spec:
+      terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: product-service
+      containers:
+        - name: product-service
+          # Local default. scripts/deploy-azure.ps1 and the GitHub Actions workflow
+          # replace "product-service:local" with the full ACR image reference.
+          image: product-service:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: APP_VERSION
+              value: "v1"
+            # ~5 ms CPU per /price call: at ~300 rps the fleet needs ~2 cores, i.e.
+            # the HPA heads for maxReplicas while still fitting 2 x B2s nodes.
+            - name: WORK_ITERATIONS
+              value: "3000"
+          resources:
+            # The HPA target (60%) is a percentage of this request, so the request
+            # value directly sets how many req/s one pod absorbs before scale-out.
+            requests:
+              cpu: 200m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              # Give the load balancer time to stop routing here before shutdown,
+              # so scale-in and rolling updates don't drop in-flight requests.
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false

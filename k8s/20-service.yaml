@@ -1,0 +1,20 @@
+# type: LoadBalancer makes AKS provision a public Azure Standard Load Balancer
+# rule + public IP that spreads traffic across the cluster nodes, and kube-proxy
+# then spreads it across the ready product-service pods.
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-service
+  namespace: flash-sale
+  labels:
+    app: product-service
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path: /readyz
+spec:
+  type: LoadBalancer
+  selector:
+    app: product-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

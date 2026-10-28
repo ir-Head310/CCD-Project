@@ -1,0 +1,11 @@
+# Keeps at least one pod serving during voluntary disruptions (node drain/upgrade).
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: product-service
+  namespace: flash-sale
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: product-service
