@@ -11,6 +11,13 @@ Run headless and keep the CSVs for analysis/plot_results.py:
            --csv results/run1 --csv-full-history
 
 Set TIME_SCALE=0.1 for a quick 1/10-length smoke run, PEAK_USERS to change the peak.
+
+Each user drops its keep-alive connection every RECONNECT_EVERY requests (default 10,
+i.e. ~10 s). The Azure load balancer and kube-proxy balance per *connection*, so
+without this the users connected before scale-out stay pinned to the original pods
+and newly added pods receive no traffic (observed in run1). Real shoppers come and
+go, so periodic reconnects are the more realistic model. Set RECONNECT_EVERY=0 to
+disable and reproduce the pinned behaviour.
 """
 import collections
 import csv
@@ -25,6 +32,7 @@ HOT_DEALS = [101, 103, 104]  # most flash-sale traffic hits a few doorbuster ite
 TIME_SCALE = float(os.environ.get("TIME_SCALE", "1"))
 PEAK_USERS = int(os.environ.get("PEAK_USERS", "300"))
 BASE_USERS = int(os.environ.get("BASE_USERS", "5"))
+RECONNECT_EVERY = int(os.environ.get("RECONNECT_EVERY", "10"))
 
 served_by = collections.Counter()
 
@@ -32,20 +40,31 @@ served_by = collections.Counter()
 class FlashSaleShopper(HttpUser):
     wait_time = constant_throughput(1)
 
+    def on_start(self):
+        # Stagger the first reconnect so users don't all reconnect in lockstep.
+        self._sent = random.randrange(RECONNECT_EVERY) if RECONNECT_EVERY else 0
+
+    def _get(self, path, name):
+        if RECONNECT_EVERY and self._sent >= RECONNECT_EVERY:
+            self.client.close()  # drop pooled connections; the next request opens a new one
+            self._sent = 0
+        self._sent += 1
+        self.client.get(path, name=name)
+
     @task(6)
     def check_deal_price(self):
         pid = random.choice(HOT_DEALS) if random.random() < 0.7 else random.choice(PRODUCT_IDS)
         qty = random.choice([1, 1, 1, 2, 3])
-        self.client.get(f"/products/{pid}/price?qty={qty}", name="/products/[id]/price")
+        self._get(f"/products/{pid}/price?qty={qty}", "/products/[id]/price")
 
     @task(3)
     def view_product(self):
-        self.client.get(f"/products/{random.choice(PRODUCT_IDS)}", name="/products/[id]")
+        self._get(f"/products/{random.choice(PRODUCT_IDS)}", "/products/[id]")
 
     @task(1)
     def browse_category(self):
         cat = random.choice(["electronics", "fashion", "home", "grocery", "books"])
-        self.client.get(f"/products?category={cat}", name="/products?category")
+        self._get(f"/products?category={cat}", "/products?category")
 
 
 class FlashSaleShape(LoadTestShape):
