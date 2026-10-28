@@ -13,7 +13,7 @@ import socket
 import sys
 import time
 
-from flask import Flask, abort, g, jsonify, request
+from flask import Flask, abort, g, jsonify, render_template, request
 
 from catalog import PRODUCTS
 
@@ -95,7 +95,7 @@ def _start_timer():
 def _log_and_tag(response):
     # X-Served-By lets the load test / demo show requests spreading across pods.
     response.headers["X-Served-By"] = POD_NAME
-    if request.path not in ("/healthz", "/readyz"):
+    if request.path not in ("/healthz", "/readyz", "/whoami"):
         latency_ms = (time.perf_counter() - g.t0) * 1000
         log.info(
             "request",
@@ -112,6 +112,18 @@ def _log_and_tag(response):
 @app.get("/")
 def index():
     return jsonify(service="product-service", version=APP_VERSION, pod=POD_NAME)
+
+
+@app.get("/shop")
+def shop():
+    # Demo storefront: product grid plus a live panel showing which pod answers.
+    return render_template("shop.html", pod=POD_NAME, version=APP_VERSION)
+
+
+@app.get("/whoami")
+def whoami():
+    # Cheap endpoint the storefront polls to show load balancing across pods.
+    return jsonify(pod=POD_NAME, version=APP_VERSION)
 
 
 @app.get("/healthz")

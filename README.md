@@ -64,6 +64,12 @@ docs/                cost-analysis.md
 | `GET /products/<id>`              | One product                                                             |
 | `GET /products/<id>/price?qty=n`  | Flash-sale price. **CPU-intensive**: `WORK_ITERATIONS` rounds of SHA-256 |
 | `GET /healthz` / `GET /readyz`    | Liveness / readiness probes                                             |
+| `GET /shop`                       | **Demo storefront**: product grid with live prices, plus a "Live infrastructure" bar showing which pod answers and every pod seen so far |
+| `GET /whoami`                     | Pod name and version. The storefront polls it every 3 s                 |
+
+**Demo tip:** open `http://<EXTERNAL-IP>/shop` on the projector while Locust runs. Gunicorn closes idle keep-alive
+connections after 2 s, so each 3-second poll arrives on a new connection, and new pod names appear in the bar as the
+HPA scales out.
 
 Every response has an `X-Served-By: <pod-name>` header. Locust counts these, which shows how requests were spread
 across pods (`*_served_by.csv`).

@@ -9,6 +9,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py catalog.py ./
+COPY templates ./templates
 
 RUN useradd --uid 10001 --no-create-home appuser
 USER 10001
@@ -16,4 +17,6 @@ USER 10001
 EXPOSE 8080
 # One sync worker per pod: each pod gets a small CPU limit, so scaling happens by
 # adding pods (HPA) rather than by adding workers inside a pod.
-CMD ["sh", "-c", "exec gunicorn --bind 0.0.0.0:${PORT} --workers 1 --threads 4 --timeout 30 --access-logfile - app:app"]
+# --keep-alive 2 (gunicorn's default, made explicit): the /shop page polls every 3 s,
+# so each poll arrives on a fresh connection that Kubernetes may route to another pod.
+CMD ["sh", "-c", "exec gunicorn --bind 0.0.0.0:${PORT} --workers 1 --threads 4 --timeout 30 --keep-alive 2 --access-logfile - app:app"]

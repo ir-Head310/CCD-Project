@@ -40,3 +40,11 @@ def test_price_validation(client):
 
 def test_served_by_header(client):
     assert client.get("/").headers["X-Served-By"]
+
+
+def test_shop_page_and_whoami(client):
+    page = client.get("/shop")
+    assert page.status_code == 200
+    assert b"FlashKart" in page.data
+    who = client.get("/whoami").get_json()
+    assert who["pod"] and who["version"]
