@@ -6,10 +6,6 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.0"
     }
-    azuread = {
-      source  = "hashicorp/azuread"
-      version = "~> 3.0"
-    }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.6"
@@ -25,6 +21,17 @@ provider "azurerm" {
     }
   }
   subscription_id = var.subscription_id
-}
 
-provider "azuread" {}
+  # Register only the resource providers this project uses, not azurerm's long default list.
+  resource_provider_registrations = "none"
+  resource_providers_to_register = [
+    "Microsoft.Compute",
+    "Microsoft.ContainerRegistry",
+    "Microsoft.ContainerService",
+    "Microsoft.Insights",
+    "Microsoft.ManagedIdentity",
+    "Microsoft.Network",
+    "Microsoft.OperationalInsights",
+    "Microsoft.OperationsManagement",
+  ]
+}
