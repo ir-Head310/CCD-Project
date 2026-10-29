@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flash Sale Control Room</title>
+<style>
+  :root {
+    --bg: #05070d; --panel: rgba(12, 18, 32, 0.72); --border: rgba(120, 170, 255, 0.18);
+    --text: #e6edf7; --muted: #8b98ad; --cyan: #38bdf8; --pink: #f472b6; --green: #22e07a;
+    --amber: #ffb020; --red: #ff2d55;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
+               font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #scene { position: fixed; inset: 0; }
+  .panel { position: fixed; background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+           backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); padding: 14px 16px; }
+  #left { top: 16px; left: 16px; width: 320px; }
+  #right { top: 16px; right: 16px; width: 300px; }
+  #log { bottom: 16px; left: 16px; width: 380px; max-height: 210px; overflow: hidden; }
+  #chartbox { bottom: 16px; right: 16px; width: 340px; }
+  h1 { margin: 0 0 6px; font-size: 1.05rem; letter-spacing: 2px; text-transform: uppercase; }
+  h1 span { color: var(--pink); }
+  .badge { display: inline-block; font-size: .72rem; font-weight: 700; letter-spacing: 1px; padding: 3px 8px;
+           border-radius: 6px; text-transform: uppercase; }
+  .badge.sim { background: rgba(255, 176, 32, .15); color: var(--amber); border: 1px solid rgba(255, 176, 32, .5); }
+  .badge.live { background: rgba(34, 224, 122, .12); color: var(--green); border: 1px solid rgba(34, 224, 122, .5); }
+  .note { font-size: .74rem; color: var(--muted); margin-top: 6px; line-height: 1.35; }
+  .note.err { color: var(--red); }
+  .label { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .slider-row { display: flex; align-items: baseline; justify-content: space-between; margin-top: 14px; }
+  .big { font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .big small { font-size: .85rem; font-weight: 500; color: var(--muted); }
+  input[type=range] { width: 100%; margin: 8px 0 4px; accent-color: var(--pink); height: 28px; }
+  .presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
+  .presets button { background: rgba(255, 255, 255, .05); border: 1px solid var(--border); color: var(--text);
+                    border-radius: 8px; padding: 7px 4px; font-size: .78rem; cursor: pointer; }
+  .presets button:hover { border-color: var(--cyan); }
+  .presets button.sale { background: rgba(244, 114, 182, .18); border-color: var(--pink); font-weight: 700; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+  .stat .v { font-size: 1.35rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .v small { font-size: .75rem; color: var(--muted); font-weight: 500; }
+  .bar { position: relative; height: 10px; border-radius: 6px; background: rgba(255, 255, 255, .08); margin-top: 6px; overflow: hidden; }
+  .bar .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--green), var(--amber), var(--red));
+               transition: width .6s; }
+  .bar .mark { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #fff; }
+  .hpa { margin-top: 12px; }
+  .hpa-row { display: flex; justify-content: space-between; font-size: .82rem; margin-top: 4px; }
+  #events { list-style: none; margin: 8px 0 0; padding: 0; font-size: .8rem; }
+  #events li { padding: 3px 0; border-bottom: 1px solid rgba(255, 255, 255, .05); display: flex; gap: 8px; }
+  #events time { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 42px; }
+  #events .up { color: var(--green); } #events .down { color: var(--cyan); } #events .warn { color: var(--amber); }
+  #events .bad { color: var(--red); }
+  canvas#chart { width: 100%; height: 110px; display: block; margin-top: 6px; }
+  .legend { display: flex; gap: 12px; font-size: .72rem; color: var(--muted); }
+  .legend i { display: inline-block; width: 10px; height: 3px; margin-right: 4px; vertical-align: middle; }
+  .tools { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
+  .tools button { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 8px;
+                  padding: 6px 10px; font-size: .75rem; cursor: pointer; }
+  /* 3D labels */
+  .podlabel { font: 600 11px ui-monospace, Consolas, monospace; color: #dbeafe; text-align: center; white-space: nowrap;
+              text-shadow: 0 0 6px #000, 0 0 2px #000; pointer-events: none; }
+  .podlabel span { display: block; font-weight: 500; color: #9fb4d0; }
+  .podlabel.Pending span, .podlabel.Starting span { color: var(--amber); }
+  .podlabel.Terminating span { color: var(--red); }
+  .nodelabel { font: 700 11px system-ui, sans-serif; letter-spacing: 1.5px; color: #7dd3fc; text-transform: uppercase;
+               text-shadow: 0 0 8px #000; pointer-events: none; white-space: nowrap; }
+  .nodelabel span { color: var(--amber); }
+  .lblabel { font: 800 12px system-ui, sans-serif; letter-spacing: 3px; color: #67e8f9; pointer-events: none; text-shadow: 0 0 8px #000; }
+  @media (max-width: 900px) {
+    #left, #right { width: calc(50% - 24px); } #log, #chartbox { display: none; }
+    #right .stats { grid-template-columns: 1fr; } .tools { display: none; }
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="scene"></div>
+
+<section id="left" class="panel">
+  <h1>Flash Sale <span>Control Room</span></h1>
+  <span id="mode" class="badge sim">connecting…</span>
+  <div id="modenote" class="note"></div>
+  <div class="slider-row">
+    <span class="label">Shoppers (≈ req/s)</span>
+    <span class="big" id="usersTarget">0</span>
+  </div>
+  <input id="slider" type="range" min="0" max="400" step="5" value="0" aria-label="Number of simulated shoppers">
+  <div class="note">Active now: <b id="usersNow">0</b> · each shopper sends ~1 request/s</div>
+  <div class="presets">
+    <button data-users="0">Off</button>
+    <button data-users="5">Normal day</button>
+    <button data-users="100">Busy</button>
+    <button data-users="200">Promo</button>
+    <button data-users="300" class="sale">⚡ Flash sale</button>
+    <button data-users="400">Meltdown</button>
+  </div>
+</section>
+
+<section id="right" class="panel">
+  <div class="stats">
+    <div class="stat"><div class="label">Throughput</div><div class="v" id="rps">0 <small>req/s</small></div></div>
+    <div class="stat"><div class="label">p95 latency</div><div class="v" id="p95">– <small>ms</small></div></div>
+    <div class="stat"><div class="label">Pods ready / wanted</div><div class="v" id="pods">– <small></small></div></div>
+    <div class="stat"><div class="label">Nodes</div><div class="v" id="nodes">–</div></div>
+    <div class="stat"><div class="label">Requests</div><div class="v" id="total">0</div></div>
+    <div class="stat"><div class="label">Availability</div><div class="v" id="avail">–</div></div>
+  </div>
+  <div class="hpa">
+    <div class="label">HPA · average CPU vs 60% target</div>
+    <div class="bar"><div class="fill" id="cpuFill"></div><div class="mark" id="cpuMark"></div></div>
+    <div class="hpa-row"><span id="cpuText">–</span><span id="hpaText">–</span></div>
+    <div class="note">CPU is published about once a minute on AKS, which is why scaling lags the traffic.
+      Pod liquid shows each pod's live requests/s.</div>
+  </div>
+</section>
+
+<section id="log" class="panel">
+  <div class="label">Events</div>
+  <ul id="events"></ul>
+</section>
+
+<section id="chartbox" class="panel">
+  <div class="legend"><span><i style="background:#38bdf8"></i>req/s</span><span><i style="background:#f472b6"></i>pods ready</span>
+    <span><i style="background:#ffb020"></i>HPA desired</span><span id="clock" style="margin-left:auto"></span></div>
+  <canvas id="chart"></canvas>
+</section>
+
+<div class="tools">
+  <button id="rotate">Sway: on</button>
+  <button id="resetCam">Reset view</button>
+</div>
+
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { CSS2DRenderer, CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+
+// ---------- renderer, camera, post-processing ----------------------------------------------
+const host = document.getElementById("scene");
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+host.appendChild(renderer.domElement);
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(innerWidth, innerHeight);
+Object.assign(labelRenderer.domElement.style, { position: "fixed", inset: "0", pointerEvents: "none" });
+host.appendChild(labelRenderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05070d);
+scene.fog = new THREE.FogExp2(0x05070d, 0.022);
+
+const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 0.1, 200);
+const HOME = new THREE.Vector3(0, 11, 23);
+camera.position.copy(HOME);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1.5, 1);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.48;
+controls.minDistance = 8;
+controls.maxDistance = 60;
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.7, 0.45, 0.2);
+
+// Gentle side-to-side sway (never swings behind the load balancer); stops once the user drags.
+let sway = true;
+const swayBase = new THREE.Spherical().setFromVector3(HOME.clone().sub(new THREE.Vector3(0, 1.5, 1)));
+controls.addEventListener("start", () => setSway(false));
+function setSway(on) {
+  sway = on;
+  document.getElementById("rotate").textContent = `Sway: ${on ? "on" : "off"}`;
+}
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  labelRenderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+});
+
+// ---------- static scenery -------------------------------------------------------------------
+scene.add(new THREE.HemisphereLight(0x8fb4ff, 0x0a0a14, 0.7));
+const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+sun.position.set(6, 14, 10);
+scene.add(sun);
+
+const grid = new THREE.GridHelper(140, 140, 0x1d4ed8, 0x0b1730);
+grid.material.transparent = true;
+grid.material.opacity = 0.45;
+scene.add(grid);
+
+const LB_POS = new THREE.Vector3(0, 1.6, 10.5);
+const lb = new THREE.Group();
+lb.position.copy(LB_POS);
+const lbRing = new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.07, 16, 96),
+  new THREE.MeshStandardMaterial({ color: 0x0e7490, emissive: 0x22d3ee, emissiveIntensity: 0.9 }));
+const lbRing2 = new THREE.Mesh(new THREE.TorusGeometry(0.75, 0.035, 12, 96),
+  new THREE.MeshStandardMaterial({ color: 0x701a75, emissive: 0xf472b6, emissiveIntensity: 0.9 }));
+const lbCore = new THREE.Mesh(new THREE.CircleGeometry(1.0, 64),
+  new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.05, side: THREE.DoubleSide }));
+lb.add(lbRing, lbRing2, lbCore);
+const lbPole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.6), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
+lbPole.position.set(0, -0.9, 0);
+lb.add(lbPole);
+lb.add(label("lblabel", "LOAD BALANCER", 0, -2.0, 0));
+scene.add(lb);
+
+function label(cls, html, x, y, z) {
+  const div = document.createElement("div");
+  div.className = cls;
+  div.innerHTML = html;
+  const obj = new CSS2DObject(div);
+  obj.position.set(x, y, z);
+  return obj;
+}
+
+// ---------- colours ---------------------------------------------------------------------------
+const C_GREEN = new THREE.Color(0x22e07a), C_AMBER = new THREE.Color(0xffb020), C_RED = new THREE.Color(0xff2d55);
+function loadColor(f, out = new THREE.Color()) {
+  if (f <= 0.55) return out.copy(C_GREEN).lerp(C_AMBER, f / 0.55);
+  return out.copy(C_AMBER).lerp(C_RED, Math.min(1, (f - 0.55) / 0.4));
+}
+
+// ---------- nodes --------------------------------------------------------------------------------
+const nodeViews = new Map();
+const glassGeo = new THREE.CylinderGeometry(0.62, 0.62, 2.4, 40, 1, true);
+const liquidGeo = new THREE.CylinderGeometry(0.54, 0.54, 1, 40);
+liquidGeo.translate(0, 0.5, 0);
+const ringGeo = new THREE.TorusGeometry(0.62, 0.035, 8, 48);
+
+function makeNode(name) {
+  const group = new THREE.Group();
+  const platform = new THREE.Mesh(new THREE.BoxGeometry(1, 0.35, 1),
+    new THREE.MeshStandardMaterial({ color: 0x0f1a2e, metalness: 0.6, roughness: 0.35, transparent: true }));
+  platform.position.y = 0.175;
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 0.35, 1)),
+    new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true }));
+  edges.position.y = 0.175;
+  const tag = label("nodelabel", "", 0, 0.1, 0);
+  group.add(platform, edges, tag);
+  scene.add(group);
+  return { name, group, platform, edges, tag, x: null, alpha: 0, rise: -3, w: 6.4, d: 4.6, status: "" };
+}
+
+// ---------- pods ---------------------------------------------------------------------------------
+const podViews = new Map();
+function makePod(name) {
+  const group = new THREE.Group();
+  const glass = new THREE.Mesh(glassGeo, new THREE.MeshPhysicalMaterial({
+    color: 0xa5d8ff, transparent: true, opacity: 0.2, roughness: 0.08, metalness: 0.1,
+    side: THREE.DoubleSide, depthWrite: false }));
+  glass.position.y = 1.2;
+  const wire = new THREE.Mesh(glassGeo, new THREE.MeshBasicMaterial({ color: 0xffb020, wireframe: true, transparent: true, opacity: 0 }));
+  wire.position.y = 1.2;
+  const liquid = new THREE.Mesh(liquidGeo, new THREE.MeshStandardMaterial({
+    color: 0x0a3d24, emissive: 0x22e07a, emissiveIntensity: 1.4, transparent: true, roughness: 0.3 }));
+  liquid.position.y = 0.02;
+  const ringMat = new THREE.MeshStandardMaterial({ color: 0x0e7490, emissive: 0x38bdf8, emissiveIntensity: 1.6, transparent: true });
+  const top = new THREE.Mesh(ringGeo, ringMat), bottom = new THREE.Mesh(ringGeo, ringMat);
+  top.rotation.x = bottom.rotation.x = Math.PI / 2;
+  top.position.y = 2.4;
+  bottom.position.y = 0.02;
+  const tag = label("podlabel", "", 0, 3.05, 0);
+  group.add(glass, wire, liquid, top, bottom, tag);
+  scene.add(group);
+  return { name, group, glass, wire, liquid, ringMat, tag, pos: null, fill: 0, alpha: 0, data: null, gone: false };
+}
+
+// ---------- layout ---------------------------------------------------------------------------------
+const SLOT_X = 2.5, SLOT_Z = 2.3, NODE_GAP = 2.5;
+function layout(st) {
+  const nodes = [...st.nodes].sort((a, b) => a.name.localeCompare(b.name));
+  const podsByNode = new Map(nodes.map((n) => [n.name, []]));
+  const pending = [];
+  for (const p of st.pods) {
+    if (p.node && podsByNode.has(p.node) && p.phase !== "Pending") podsByNode.get(p.node).push(p);
+    else pending.push(p);
+  }
+  const sizes = nodes.map((n) => {
+    const k = Math.max(podsByNode.get(n.name).length, 4);
+    const cols = k <= 4 ? 2 : 3, rows = Math.ceil(k / cols);
+    return { cols, rows, w: cols * SLOT_X + 1.4, d: rows * SLOT_Z + 1.0 };
+  });
+  const totalW = sizes.reduce((s, z) => s + z.w, 0) + NODE_GAP * Math.max(0, nodes.length - 1);
+  let cursor = -totalW / 2;
+  const nodeTargets = new Map(), podTargets = new Map();
+  nodes.forEach((n, i) => {
+    const sz = sizes[i], cx = cursor + sz.w / 2;
+    cursor += sz.w + NODE_GAP;
+    nodeTargets.set(n.name, { x: cx, w: sz.w, d: sz.d, status: n.status });
+    podsByNode.get(n.name).sort((a, b) => a.name.localeCompare(b.name)).forEach((p, j) => {
+      const col = j % sz.cols, row = Math.floor(j / sz.cols);
+      podTargets.set(p.name, new THREE.Vector3(cx + (col - (sz.cols - 1) / 2) * SLOT_X, 0.35,
+        (row - (sz.rows - 1) / 2) * SLOT_Z));
+    });
+  });
+  pending.sort((a, b) => a.name.localeCompare(b.name)).forEach((p, i) => {
+    // Pending pods hover up and behind the nodes, waiting for somewhere to be scheduled.
+    podTargets.set(p.name, new THREE.Vector3((i - (pending.length - 1) / 2) * 1.9, 4.2, -5.5));
+  });
+  return { nodeTargets, podTargets };
+}
+
+// ---------- apply a new state ----------------------------------------------------------------------
+let latest = null;
+window.controlRoom = { podViews, nodeViews, layout };  // handy for poking at the scene from devtools
+function applyState(st) {
+  const { nodeTargets, podTargets } = layout(st);
+  for (const [name, t] of nodeTargets) {
+    let v = nodeViews.get(name);
+    if (!v) { v = makeNode(name); v.x = t.x; nodeViews.set(name, v); }
+    Object.assign(v, { tx: t.x, w: t.w, d: t.d, status: t.status, gone: false });
+    const short = name.replace(/^aks-.*-vmss/, "node ");
+    v.tag.element.innerHTML = `${short}${t.status === "Ready" ? "" : ` <span>· ${t.status}</span>`}`;
+  }
+  for (const [name, v] of nodeViews) if (!nodeTargets.has(name)) v.gone = true;
+
+  const cap = st.pod_capacity_rps || 200;
+  for (const p of st.pods) {
+    let v = podViews.get(p.name);
+    const target = podTargets.get(p.name);
+    if (!v) { v = makePod(p.name); v.pos = target.clone().add(new THREE.Vector3(0, p.phase === "Pending" ? 1.5 : 3, 0)); podViews.set(p.name, v); }
+    v.data = p;
+    v.target = target;
+    v.gone = false;
+    v.targetFill = p.phase === "Running" ? Math.min(p.rps / cap, 1.15) : p.phase === "Starting" ? 0.04 : 0;
+    const short = p.name.split("-").pop();
+    const sub = p.phase === "Running" ? `${Math.round(p.rps)} r/s${p.cpu_m != null ? ` · ${p.cpu_m}m` : ""}` : p.phase;
+    v.tag.element.className = `podlabel ${p.phase}`;
+    v.tag.element.innerHTML = `${short}<span>${sub}</span>`;
+  }
+  for (const [name, v] of podViews) if (!st.pods.some((p) => p.name === name)) v.gone = true;
+  latest = st;
+}
+
+// ---------- particles (requests) -------------------------------------------------------------------
+const MAX_PARTICLES = 1400;
+const particleMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.075, 8, 8),
+  new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), MAX_PARTICLES);
+particleMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+scene.add(particleMesh);
+const particles = Array.from({ length: MAX_PARTICLES }, () => ({ on: false, t: 0, dur: 1, a: new THREE.Vector3(),
+  b: new THREE.Vector3(), c: new THREE.Vector3(), pod: null }));
+const tmpM = new THREE.Matrix4(), tmpV = new THREE.Vector3(), tmpC = new THREE.Color(), HIDE = new THREE.Matrix4().makeScale(0, 0, 0);
+for (let i = 0; i < MAX_PARTICLES; i++) { particleMesh.setMatrixAt(i, HIDE); particleMesh.setColorAt(i, tmpC.set(0xffffff)); }
+let spawnAcc = 0, failAcc = 0, nextFree = 0;
+
+function spawn(targetPos, color, failed) {
+  for (let k = 0; k < MAX_PARTICLES; k++) {
+    const i = (nextFree + k) % MAX_PARTICLES, p = particles[i];
+    if (p.on) continue;
+    nextFree = i + 1;
+    p.on = true; p.t = 0; p.dur = failed ? 1.1 : 0.75 + Math.random() * 0.35;
+    p.a.copy(LB_POS).add(tmpV.set((Math.random() - 0.5) * 1.8, (Math.random() - 0.5) * 1.8, 0));
+    p.c.copy(targetPos);
+    p.b.copy(p.a).lerp(p.c, 0.5).add(tmpV.set(0, failed ? 0.5 : 3 + Math.random() * 2, 0));
+    particleMesh.setColorAt(i, color);
+    return;
+  }
+}
+
+function updateParticles(dt) {
+  if (latest) {
+    const running = [...podViews.values()].filter((v) => !v.gone && v.data?.phase === "Running" && v.data.rps > 0);
+    const total = running.reduce((s, v) => s + v.data.rps, 0);
+    spawnAcc += Math.min(total * 0.55, 260) * dt;
+    while (spawnAcc >= 1 && running.length) {
+      spawnAcc -= 1;
+      let r = Math.random() * total, chosen = running[0];
+      for (const v of running) { r -= v.data.rps; if (r <= 0) { chosen = v; break; } }
+      spawn(tmpV.copy(chosen.pos).add(new THREE.Vector3(0, 2.5, 0)), loadColor(chosen.fill, tmpC), false);
+    }
+    failAcc += Math.min((latest.fail_rps || 0) * 0.8, 80) * dt;
+    while (failAcc >= 1) {
+      failAcc -= 1;
+      spawn(new THREE.Vector3((Math.random() - 0.5) * 6, 0.05, LB_POS.z - 2 - Math.random() * 3), C_RED, true);
+    }
+  }
+  for (let i = 0; i < MAX_PARTICLES; i++) {
+    const p = particles[i];
+    if (!p.on) continue;
+    p.t += dt / p.dur;
+    if (p.t >= 1) { p.on = false; particleMesh.setMatrixAt(i, HIDE); continue; }
+    const u = p.t, iu = 1 - u;
+    tmpV.set(0, 0, 0).addScaledVector(p.a, iu * iu).addScaledVector(p.b, 2 * iu * u).addScaledVector(p.c, u * u);
+    tmpM.makeTranslation(tmpV.x, tmpV.y, tmpV.z);
+    particleMesh.setMatrixAt(i, tmpM);
+  }
+  particleMesh.instanceMatrix.needsUpdate = true;
+  if (particleMesh.instanceColor) particleMesh.instanceColor.needsUpdate = true;
+}
+
+// ---------- per-frame animation ---------------------------------------------------------------------
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05), now = clock.elapsedTime;
+  const k = 1 - Math.exp(-dt * 4);
+
+  lbRing.rotation.z += dt * 0.6;
+  lbRing2.rotation.z -= dt * 1.1;
+  const pulse = latest ? Math.min(latest.rps / 300, 1.3) : 0;
+  lbRing.material.emissiveIntensity = 0.8 + pulse * 0.9 + Math.sin(now * 6) * 0.2 * pulse;
+  if (sway) {
+    const s = swayBase.clone();
+    s.theta += Math.sin(now * 0.12) * 0.42;
+    camera.position.setFromSpherical(s).add(controls.target);
+  }
+
+  for (const [name, v] of nodeViews) {
+    const provisioning = v.status !== "Ready";
+    const targetAlpha = v.gone ? 0 : 1, targetRise = v.gone ? -2 : provisioning ? -0.25 : 0;
+    v.alpha += (targetAlpha - v.alpha) * k;
+    v.rise += (targetRise - v.rise) * k * 0.7;
+    v.x += (v.tx - v.x) * k;
+    v.group.position.set(v.x, v.rise, 0);
+    v.platform.scale.set(v.w, 1, v.d);
+    v.edges.scale.set(v.w, 1, v.d);
+    v.platform.material.opacity = provisioning ? 0.15 * v.alpha : 0.95 * v.alpha;
+    v.edges.material.opacity = v.alpha * (provisioning ? 0.5 + 0.5 * Math.sin(now * 5) : 1);
+    v.edges.material.color.set(provisioning ? 0xffb020 : 0x38bdf8);
+    v.tag.position.set(0, 0.2, v.d / 2 + 0.6);
+    v.tag.element.style.opacity = v.alpha;
+    if (v.gone && v.alpha < 0.02) { scene.remove(v.group); v.tag.element.remove(); nodeViews.delete(name); }
+  }
+
+  for (const [name, v] of podViews) {
+    const phase = v.data?.phase;
+    v.pos.lerp(v.target, k * 0.9);
+    const targetAlpha = v.gone ? 0 : phase === "Terminating" ? 0.35 : 1;
+    v.alpha += (targetAlpha - v.alpha) * k;
+    const targetFill = v.gone ? 0 : v.targetFill ?? 0;
+    v.fill += (targetFill - v.fill) * k * 0.8;
+    v.group.position.copy(v.pos);
+    if (phase === "Pending") v.group.position.y += Math.sin(now * 2 + v.pos.x) * 0.15;
+
+    const pend = phase === "Pending";
+    v.wire.material.opacity = pend ? (0.12 + 0.1 * Math.sin(now * 4)) * v.alpha : 0;
+    v.glass.material.opacity = pend ? 0.03 : (phase === "Starting" ? 0.1 + 0.08 * Math.sin(now * 6) : 0.2) * v.alpha;
+    v.ringMat.opacity = pend ? 0.25 * v.alpha : v.alpha;
+    v.ringMat.emissive.set(phase === "Terminating" ? 0xff2d55 : pend || phase === "Starting" ? 0xffb020 : 0x38bdf8);
+
+    const f = Math.max(0, v.fill);
+    const over = f > 1;
+    v.liquid.visible = !pend && f > 0.005;
+    v.liquid.scale.y = Math.max(0.01, Math.min(f, 1) * 2.34);
+    loadColor(f, v.liquid.material.emissive);
+    v.liquid.material.color.copy(v.liquid.material.emissive).multiplyScalar(0.25);
+    v.liquid.material.emissiveIntensity = (0.55 + f * 0.45 + (over ? 0.3 + Math.sin(now * 10) * 0.3 : 0)) * v.alpha;
+    v.liquid.material.opacity = 0.92 * v.alpha;
+    v.tag.element.style.opacity = Math.min(1, v.alpha * 1.2);
+    if (v.gone && v.alpha < 0.02) { scene.remove(v.group); v.tag.element.remove(); podViews.delete(name); }
+  }
+
+  updateParticles(dt);
+  controls.update();
+  composer.render();
+  labelRenderer.render(scene, camera);
+}
+animate();
+
+// ---------- HUD -----------------------------------------------------------------------------------
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => Number(n).toLocaleString("en-IN");
+const history = [];
+const events = [];
+let prev = null;
+
+function clockText(t) {
+  const m = Math.floor(t / 60), s = Math.floor(t % 60);
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function logEvent(st, text, cls) {
+  events.unshift({ t: clockText(st.time), text, cls });
+  events.length = Math.min(events.length, 9);
+  $("events").replaceChildren(...events.map((e) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<time>${e.t}</time><span class="${e.cls}"></span>`;
+    li.lastChild.textContent = e.text;
+    return li;
+  }));
+}
+
+function diffEvents(st) {
+  if (!prev) return;
+  const short = (n) => n.split("-").pop();
+  const before = new Map(prev.pods.map((p) => [p.name, p.phase]));
+  for (const p of st.pods) {
+    const was = before.get(p.name);
+    if (!was) logEvent(st, `Pod ${short(p.name)} created (${p.phase})`, "up");
+    else if (was !== p.phase && p.phase === "Running") logEvent(st, `Pod ${short(p.name)} is Ready`, "up");
+    else if (was !== p.phase && p.phase === "Terminating") logEvent(st, `Pod ${short(p.name)} terminating`, "down");
+    else if (was !== p.phase && p.phase === "Starting" && was === "Pending") logEvent(st, `Pod ${short(p.name)} scheduled on ${p.node.replace(/^aks-.*-vmss/, "node ")}`, "warn");
+  }
+  if (st.hpa.desired !== prev.hpa.desired) {
+    const up = st.hpa.desired > prev.hpa.desired;
+    logEvent(st, `HPA ${up ? "scale-out" : "scale-in"}: ${prev.hpa.desired} → ${st.hpa.desired} pods (CPU ${st.hpa.cpu_pct}%)`, up ? "up" : "down");
+  }
+  const prevNodes = new Map(prev.nodes.map((n) => [n.name, n.status]));
+  for (const n of st.nodes) {
+    const was = prevNodes.get(n.name), short = n.name.replace(/^aks-.*-vmss/, "node ");
+    if (!was) logEvent(st, `Cluster autoscaler: adding ${short} (${n.status})`, "warn");
+    else if (was !== n.status) logEvent(st, `${short} is ${n.status}`, n.status === "Ready" ? "up" : "warn");
+  }
+  for (const n of prev.nodes) if (!st.nodes.some((x) => x.name === n.name)) logEvent(st, `Node ${n.name.replace(/^aks-.*-vmss/, "")} removed`, "down");
+  if (st.fail_rps > 0 && !(prev.fail_rps > 0)) logEvent(st, `Requests failing: ${st.fail_rps}/s`, "bad");
+}
+
+function renderHud(st) {
+  const sim = st.mode === "sim";
+  $("mode").className = `badge ${sim ? "sim" : "live"}`;
+  $("mode").textContent = sim ? `Simulation${st.speed !== 1 ? ` ×${st.speed}` : ""}` : "Live · AKS";
+  $("modenote").className = `note${st.error ? " err" : ""}`;
+  $("modenote").textContent = st.error ? st.error
+    : sim ? "Modelled cluster, no cloud: timings calibrated to the measured run on 28 Oct. Not real measurements."
+    : `Real traffic to ${st.host}, real pods from kubectl.`;
+  $("usersNow").textContent = st.users;
+  if (document.activeElement !== $("slider")) { $("slider").value = st.target_users; $("usersTarget").textContent = st.target_users; }
+  $("rps").innerHTML = `${fmt(Math.round(st.rps))} <small>req/s</small>`;
+  $("p95").innerHTML = `${st.rps > 0 ? fmt(st.p95_ms) : "–"} <small>ms</small>`;
+  const ready = st.pods.filter((p) => p.phase === "Running").length;
+  const pending = st.pods.filter((p) => p.phase === "Pending").length;
+  $("pods").innerHTML = `${ready} <small>/ ${st.hpa.desired}${pending ? ` · ${pending} pend.` : ""}</small>`;
+  const starting = st.nodes.filter((n) => n.status !== "Ready").length;
+  $("nodes").innerHTML = `${st.nodes.length - starting}${starting ? ` <small>+${starting} booting</small>` : ""}`;
+  $("total").textContent = fmt(st.total);
+  $("avail").textContent = st.total ? `${(100 * (1 - st.failures / st.total)).toFixed(st.failures ? 3 : 1)}%` : "–";
+  const scale = 200;
+  $("cpuFill").style.width = `${Math.min(100, (st.hpa.cpu_pct / scale) * 100)}%`;
+  $("cpuMark").style.left = `${(st.hpa.target_pct / scale) * 100}%`;
+  $("cpuText").textContent = `CPU ${st.hpa.cpu_pct}% (target ${st.hpa.target_pct}%)`;
+  $("hpaText").textContent = st.hpa.min == null ? "no HPA found" : `pods ${st.hpa.min}–${st.hpa.max}`;
+  $("clock").textContent = `t = ${clockText(st.time)}`;
+
+  history.push({ rps: st.rps, ready, desired: st.hpa.desired });
+  if (history.length > 240) history.shift();
+  drawChart();
+}
+
+function drawChart() {
+  const cv = $("chart"), dpr = Math.min(devicePixelRatio, 2);
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = "rgba(255,255,255,.07)";
+  for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(0, (h * i) / 4); ctx.lineTo(w, (h * i) / 4); ctx.stroke(); }
+  const n = 240, x = (i) => (i / (n - 1)) * w;
+  const line = (key, max, color, step) => {
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
+    const off = n - history.length;
+    history.forEach((p, i) => {
+      const px = x(i + off), py = h - 3 - (Math.min(p[key], max) / max) * (h - 6);
+      if (i === 0) ctx.moveTo(px, py);
+      else if (step) { ctx.lineTo(px, h - 3 - (Math.min(history[i - 1][key], max) / max) * (h - 6)); ctx.lineTo(px, py); }
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+  };
+  line("rps", 400, "#38bdf8", false);
+  line("desired", 10, "#ffb020", true);
+  line("ready", 10, "#f472b6", true);
+}
+
+// ---------- server I/O ------------------------------------------------------------------------------
+async function poll() {
+  try {
+    const res = await fetch("/api/state", { cache: "no-store" });
+    const st = await res.json();
+    diffEvents(st);
+    applyState(st);
+    renderHud(st);
+    prev = st;
+  } catch (err) {
+    $("modenote").className = "note err";
+    $("modenote").textContent = "Control server unreachable: is server.py still running?";
+  }
+}
+setInterval(poll, 1000);
+poll();
+
+let sendTimer = null;
+function setUsers(n) {
+  $("slider").value = n;
+  $("usersTarget").textContent = n;
+  clearTimeout(sendTimer);
+  sendTimer = setTimeout(() => fetch("/api/traffic", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ users: Number(n) }) }), 120);
+}
+$("slider").addEventListener("input", (e) => setUsers(e.target.value));
+document.querySelectorAll(".presets button").forEach((b) => b.addEventListener("click", () => setUsers(b.dataset.users)));
+$("rotate").addEventListener("click", () => setSway(!sway));
+$("resetCam").addEventListener("click", () => { controls.target.set(0, 1.5, 1); camera.position.copy(HOME); setSway(true); });
+</script>
+</body>
+</html>

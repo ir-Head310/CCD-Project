@@ -52,6 +52,7 @@ terraform/           RG, ACR, Log Analytics, AKS (+ AcrPull), optional GitHub OI
 .github/workflows/   test → build → push to ACR → rolling deploy to AKS
 loadtest/            Locust flash-sale traffic shape
 analysis/            collect_metrics.py (pod/HPA/CPU sampler), plot_results.py (graphs + timings)
+control-room/        Traffic slider + live 3D cluster view (live against AKS, or a calibrated simulation)
 scripts/             deploy-azure.ps1 (manual deploy)
 docs/                cost-analysis.md
 ```
@@ -190,6 +191,13 @@ throughput and availability.
 already at `maxReplicas`, the cluster is at capacity. That is a valid result to report. To fit the run inside your
 quota, lower `WORK_ITERATIONS` in `k8s/10-deployment.yaml` or lower `PEAK_USERS`. A fast laptop running Locust can
 generate about 300 users. If Locust warns about high CPU, run it with `--processes 4`.
+
+### Live 3D control room
+
+For the presentation, [`control-room/`](control-room/README.md) has a traffic slider and a live 3D view of pods
+filling up, the HPA scaling out, Pending pods and new nodes booting. Run it with
+`python control-room/server.py --live --host http://$IP`. Without `--live` it runs a clearly labelled simulation,
+calibrated to run2, for free rehearsal.
 
 ## 5. Availability & rolling-update demo
 

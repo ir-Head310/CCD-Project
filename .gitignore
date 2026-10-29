@@ -9,3 +9,4 @@ terraform/terraform.tfvars
 terraform/.terraform.lock.hcl.bak
 terraform/tfplan
 server.log
+control-room/*.log
