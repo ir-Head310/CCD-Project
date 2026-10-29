@@ -35,5 +35,6 @@ request, `WORK_ITERATIONS=3000`. Load came from Locust on a laptop in Manipal ru
 4. **Run2 had 4 failures, all `RemoteDisconnected`.** Three happened at about t = 300 s, the moment node 2 joined the
    cluster and its load-balancer backend pool. One happened at t ≈ 564 s, as pods were being removed during scale-in. The
    scale-in failure fits a known keep-alive race: a terminating pod closes idle connections while a client is reusing
-   one. Making the `preStop` sleep longer than the client reconnect interval (e.g. 15 s) should remove it. The node-join
-   cause is likely but not confirmed.
+   one. Making the `preStop` sleep longer than the client reconnect interval should remove it, so it has since been
+   raised from 5 s to 15 s (`k8s/10-deployment.yaml`); this is not yet verified by a new run. The node-join cause is
+   likely but not confirmed, and the preStop change does not address it.

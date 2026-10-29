@@ -77,8 +77,10 @@ spec:
             preStop:
               # Give the load balancer time to stop routing here before shutdown,
               # so scale-in and rolling updates don't drop in-flight requests.
+              # 15 s outlasts the ~10 s client reconnect interval (run2 lost one
+              # request to a keep-alive race during scale-in with 5 s).
               exec:
-                command: ["sh", "-c", "sleep 5"]
+                command: ["sh", "-c", "sleep 15"]
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
