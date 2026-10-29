@@ -63,3 +63,15 @@ variable "github_oidc_subject" {
   type        = string
   default     = ""
 }
+
+variable "budget_alert_emails" {
+  description = "Emails that get budget alerts (50% and 80% of budget_amount spent, 100% forecast). Empty = no budget."
+  type        = list(string)
+  default     = []
+}
+
+variable "budget_amount" {
+  description = "Monthly subscription budget in the billing currency (USD on Azure for Students)."
+  type        = number
+  default     = 10
+}

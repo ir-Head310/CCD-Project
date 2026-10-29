@@ -141,6 +141,10 @@ pick a region, check that it offers the VM size:
 `az vm list-skus -l <region> --size Standard_B2s --resource-type virtualMachines`. If apply fails with a vCPU quota
 error, keep `node_max_count = 2`.
 
+**Budget alert.** Set `budget_alert_emails` in `terraform.tfvars` and `apply` also creates a subscription budget
+(`budget_amount`, default $10/month) that emails at 50% and 80% of actual spend and at 100% of forecast. It is
+scoped to the subscription because AKS puts its VMs and load balancer in a separate `MC_*` resource group.
+
 ## 3. Deploy
 
 **Option A: GitHub Actions (recommended).** Push this folder to a GitHub repo. Then go to *Settings → Secrets and

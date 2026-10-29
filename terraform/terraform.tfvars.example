@@ -2,3 +2,4 @@
 subscription_id = "00000000-0000-0000-0000-000000000000"
 location        = "indiasouthcentral"
 github_repo     = "your-github-user/flash-sale-autoscaling"
+budget_alert_emails = ["you@learner.manipal.edu"]
