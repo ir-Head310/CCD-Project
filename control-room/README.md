@@ -53,7 +53,8 @@ see the docstring in `sim.py`. On the same flash-sale shape it reproduces run2 c
 
 ## Demo script (live)
 
-1. `terraform apply`, update `AZURE_CLIENT_ID` in GitHub, push or re-run the workflow, then `az aks get-credentials`.
+1. `terraform apply`, then copy all of `terraform output github_actions_variables` into GitHub again (`AZURE_CLIENT_ID`,
+   `ACR_NAME`, `AKS_RESOURCE_GROUP` and `AKS_NAME` change on every rebuild), re-run the workflow, then `az aks get-credentials`.
 2. Run `python control-room/server.py --live --host http://<EXTERNAL-IP>`.
 3. Click **Normal day** (5 shoppers): 2 calm green pods.
 4. Click **⚡ Flash sale** (300): the pods go red, the HPA scales out within about 1–2 min, 3 pods hang Pending, and
