@@ -30,9 +30,9 @@ resource "azurerm_container_registry" "main" {
 
 # --- Monitoring & logging (AWS CloudWatch equivalent) ------------------------
 resource "azurerm_log_analytics_workspace" "main" {
-  name                = "log-${local.name}"
+  name                = "log-${local.name}-${var.monitoring_location}"
   resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
+  location            = var.monitoring_location
   sku                 = "PerGB2018"
   retention_in_days   = var.log_retention_days
   daily_quota_gb      = 1 # hard cap on ingestion so a runaway log loop can't burn credit
@@ -60,6 +60,12 @@ resource "azurerm_kubernetes_cluster" "main" {
     }
   }
 
+  # Remove an empty node after 1 min instead of the default 10, so scale-in fits in a demo.
+  auto_scaler_profile {
+    scale_down_unneeded        = "1m"
+    scale_down_delay_after_add = "1m"
+  }
+
   identity {
     type = "SystemAssigned"
   }
@@ -79,6 +85,48 @@ resource "azurerm_kubernetes_cluster" "main" {
   lifecycle {
     ignore_changes = [default_node_pool[0].node_count]
   }
+}
+
+# With msi_auth the agent sends nothing until a data collection rule is associated
+# with the cluster. az/the portal create this automatically; Terraform does not.
+resource "azurerm_monitor_data_collection_rule" "container_insights" {
+  name                = "MSCI-${var.monitoring_location}-${azurerm_kubernetes_cluster.main.name}"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = var.monitoring_location
+  tags                = local.tags
+
+  destinations {
+    log_analytics {
+      workspace_resource_id = azurerm_log_analytics_workspace.main.id
+      name                  = "ciworkspace"
+    }
+  }
+
+  data_flow {
+    streams      = ["Microsoft-ContainerInsights-Group-Default"]
+    destinations = ["ciworkspace"]
+  }
+
+  data_sources {
+    extension {
+      name           = "ContainerInsightsExtension"
+      extension_name = "ContainerInsights"
+      streams        = ["Microsoft-ContainerInsights-Group-Default"]
+      extension_json = jsonencode({
+        dataCollectionSettings = {
+          interval               = "1m"
+          namespaceFilteringMode = "Off"
+          enableContainerLogV2   = true
+        }
+      })
+    }
+  }
+}
+
+resource "azurerm_monitor_data_collection_rule_association" "container_insights" {
+  name                    = "ContainerInsightsExtension"
+  target_resource_id      = azurerm_kubernetes_cluster.main.id
+  data_collection_rule_id = azurerm_monitor_data_collection_rule.container_insights.id
 }
 
 # Let the cluster's kubelet pull images from ACR without stored credentials.

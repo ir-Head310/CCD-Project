@@ -18,6 +18,14 @@ variable "location" {
   default     = "indiasouthcentral"
 }
 
+variable "monitoring_location" {
+  # Data collection rules aren't offered in indiasouthcentral, and the rule must sit in its
+  # workspace's region. The cluster can report to a workspace in another region.
+  description = "Region for the Log Analytics workspace and its Container Insights data collection rule."
+  type        = string
+  default     = "centralindia"
+}
+
 variable "node_vm_size" {
   description = "VM size for AKS nodes. Standard_B2s (2 vCPU, 4 GiB) is the cheapest size that runs AKS comfortably."
   type        = string
@@ -25,9 +33,11 @@ variable "node_vm_size" {
 }
 
 variable "node_min_count" {
+  # 2 keeps both nodes up so a sale never waits ~2.5 min for a node to boot; set 1 to
+  # show the cluster autoscaler adding a node (and to halve VM cost while idle).
   description = "Minimum nodes for the AKS cluster autoscaler."
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "node_max_count" {

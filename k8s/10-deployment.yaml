@@ -64,7 +64,10 @@ spec:
               port: http
             initialDelaySeconds: 3
             periodSeconds: 5
-            failureThreshold: 2
+            # A saturated pod answers slowly but correctly; with the 1 s default it
+            # flapped out of rotation and pushed its load onto the other pod.
+            timeoutSeconds: 3
+            failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /healthz
