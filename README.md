@@ -24,10 +24,10 @@ Every AWS service in the synopsis has a direct Azure equivalent:
 ```mermaid
 flowchart LR
   L[Locust<br/>flash-sale shape<br/>5 → 300 rps] -->|HTTP| LB[Azure Standard<br/>Load Balancer]
-  subgraph AKS[AKS cluster - node autoscaler 1-2 nodes]
+  subgraph AKS[AKS cluster - 2 nodes, autoscaler min 2 max 2]
     LB --> S[Service product-service]
     S --> P1[pod] & P2[pod] & P3[pod ...]
-    MS[metrics-server] -->|CPU| HPA[HPA<br/>2-10 pods @ 60% CPU]
+    MS[metrics-server] -->|CPU| HPA[HPA<br/>2-10 pods @ 35% CPU]
     HPA -->|scale| D[Deployment<br/>RollingUpdate + probes]
     D --> P1 & P2 & P3
   end
@@ -39,9 +39,15 @@ flowchart LR
 ```
 
 **The control loop being measured.** More requests mean more CPU per pod. metrics-server reports CPU, and when
-average CPU goes over 60% of the pod's request, the HPA adds pods. The load balancer and kube-proxy spread traffic
+average CPU goes over 35% of the pod's request, the HPA adds pods. The load balancer and kube-proxy spread traffic
 across the new pods. If the new pods don't fit on the current nodes, the AKS cluster autoscaler adds a node. When the
-sale ends, CPU falls, and after a 2-minute stabilisation window the HPA removes pods.
+sale ends, CPU falls, and after a 30-second stabilisation window the HPA removes pods.
+
+**Tuned for a short demo.** The measured runs in `docs/results.md` used a 60% target, a 2-minute scale-down window
+and 1–2 nodes, and capacity lagged demand by about 3 minutes. The defaults now trade idle cost for speed: a 35% target
+so the HPA acts on the first CPU sample, a 30 s scale-down window, and `node_min_count = 2` so a sale never waits
+about 2.5 minutes for a node to boot. Set `node_min_count = 1` to show the cluster autoscaler adding a node, or to
+pre-warm the second node only before a scheduled sale.
 
 ## Repository layout
 
@@ -219,7 +225,15 @@ zero while `X-Served-By` moves to the new pods. To show the liveness probe worki
 ## 6. Monitoring (CloudWatch equivalent)
 
 In the Azure Portal open the **AKS cluster → Monitoring → Insights**. It shows live node and pod CPU and memory and
-the container logs. In **Logs** (Log Analytics) you can run:
+the container logs. Data starts about 5–10 minutes after `terraform apply`.
+
+The add-on alone collects nothing: with managed-identity auth the agent needs a data collection rule linked to the
+cluster, which the portal creates but Terraform doesn't, so `terraform/main.tf` defines it. Data collection rules aren't
+offered in `indiasouthcentral`, so the workspace and rule live in `monitoring_location` (`centralindia`). If you add
+the rule to a running cluster, restart the agent with
+`kubectl -n kube-system rollout restart daemonset/ama-logs deployment/ama-logs-rs`.
+
+In **Logs** (Log Analytics) you can run:
 
 ```kusto
 // Request log lines emitted by the service (JSON parsed)

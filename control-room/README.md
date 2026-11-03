@@ -26,7 +26,7 @@ internet connection to load three.js from the jsDelivr CDN.
 | Red particles falling short | Failed requests |
 
 The right panel shows throughput, p95 latency, pods ready vs wanted, nodes, availability, and the HPA's CPU figure
-against its 60% target. The event log records every scale-out, scale-in and node change.
+against its target (35% now). The event log records every scale-out, scale-in and node change.
 
 ## Modes
 
@@ -57,8 +57,9 @@ see the docstring in `sim.py`. On the same flash-sale shape it reproduces run2 c
    `ACR_NAME`, `AKS_RESOURCE_GROUP` and `AKS_NAME` change on every rebuild), re-run the workflow, then `az aks get-credentials`.
 2. Run `python control-room/server.py --live --host http://<EXTERNAL-IP>`.
 3. Click **Normal day** (5 shoppers): 2 calm green pods.
-4. Click **⚡ Flash sale** (300): the pods go red, the HPA scales out within about 1–2 min, 3 pods hang Pending, and
-   a node boots. After about 3 min the new pods take traffic and everything turns green.
-5. Click **Normal day** again: after the 2-minute stabilisation window the pods drain and disappear. The empty node
-   is removed about 10 min later.
+4. Click **⚡ Flash sale** (300): the pods go red and the HPA scales out within about a minute. Both nodes are
+   already up (`node_min_count = 2`), so the new pods start within seconds and everything turns green. With
+   `node_min_count = 1`, about 3 pods hang Pending while a node boots, and the new pods take traffic after about 3 min.
+5. Click **Normal day** again: after the next CPU sample and the 30 s stabilisation window, the pods drain and
+   disappear. With `node_min_count = 1`, the empty node is removed about 1 min after its last pod.
 6. Optionally open `http://<EXTERNAL-IP>/shop` in another window to show the shopper's view.

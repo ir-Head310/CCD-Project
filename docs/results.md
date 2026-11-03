@@ -5,6 +5,10 @@ request, `WORK_ITERATIONS=3000`. Load came from Locust on a laptop in Manipal ru
 (5 → 300 users at ~1 req/s each → hold → 5). Raw CSVs and figures are in `results/` (git-ignored). Regenerate them with
 `analysis/plot_results.py`.
 
+These runs predate the demo tuning of 2026-11-03 (35% target, 30 s scale-down window, 2 fixed nodes, 3 s readiness
+timeout), which has not been measured with this test. They also collected no Azure Monitor data, because the data
+collection rule was missing until then.
+
 | Metric                                  | run1 (persistent connections) | run2 (reconnect every 10 requests) |
 |-----------------------------------------|-------------------------------|------------------------------------|
 | Requests / failures                     | 86,395 / 0                    | 86,247 / 4                         |
